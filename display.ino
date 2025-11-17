@@ -59,14 +59,14 @@ void showNumber(uint8_t num) {
 
 /*
   Cycles through each of the states of the 
-  7-segment display at .5s increments.
+  7-segment display at .125s increments.
 */
 void testDisplay() {
   showArr(ERROR);
-  delay(500);
+  delay(125);
   
   for (int i = 0; i < 10; i++) {
     showNumber(i);
-    delay(500);
+    delay(125);
   } 
 }

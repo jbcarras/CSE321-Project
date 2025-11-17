@@ -6,13 +6,20 @@
 
 //Sensor that is on the inside of the house
 #define SENS_IN 9
+#define IN_LED 10
+
 //Sensor that is on the outside of the house
 #define SENS_OUT 2
+#define OUT_LED 3
+
 
 //Function prototypes
 void showNumber(uint8_t num);
 void initDisplay();
 void testDisplay();
+
+unsigned long lastIn = 0;
+unsigned long lastOut = 0;
 
 //The count is how many cats are outside
 volatile int count = 0;
@@ -55,8 +62,10 @@ void sensorInTask(void *pvParameters) {
   TimerHandle_t inCatTimer = xTimerCreate("Inside Cat Timer", pdMS_TO_TICKS(2000), pdFALSE, NULL, ditchInCatCallback);
   Serial.println(":D Indoor sensor started");
   for (;;) {
-    if (digitalRead(SENS_IN) == HIGH) { // TODO: modify to read from motion sensor appropriately
-      
+    if (digitalRead(SENS_IN) == HIGH && millis() - lastIn > 200) { // TODO: modify to read from motion sensor appropriately
+      Serial.println("MOTION IN");
+      lastIn = millis();
+      digitalWrite(IN_LED, HIGH);
       if (!inCatPres && outCatPres) {
         
         if (xSemaphoreTake(countAccessSem, pdMS_TO_TICKS(1000)) == pdTRUE) {
@@ -66,7 +75,9 @@ void sensorInTask(void *pvParameters) {
         } else {
           Serial.println(">:( Indoor sensor wants the semaphore!!");
         }
-        outCatPres = false;
+        // outCatPres = false;
+      } else {
+        digitalWrite(IN_LED, LOW);
       }
       
       
@@ -87,8 +98,10 @@ void sensorOutTask(void *pvParameters) {
   TimerHandle_t outCatTimer = xTimerCreate("Outside Cat Timer", pdMS_TO_TICKS(2000), pdFALSE, NULL, ditchOutCatCallback);
   Serial.println(":D Outdoor sensor started");
   for (;;) {
-    if (digitalRead(SENS_OUT) == HIGH) { // TODO: modify to read from motion sensor appropriately
-      
+    if (digitalRead(SENS_OUT) == HIGH && millis() - lastOut > 200) { // TODO: modify to read from motion sensor appropriately
+      Serial.println("MOTION OUT");
+      lastOut = millis();
+      digitalWrite(OUT_LED, HIGH);
       if (!outCatPres && inCatPres) {
         
         if (xSemaphoreTake(countAccessSem, pdMS_TO_TICKS(1000)) == pdTRUE) {
@@ -98,10 +111,12 @@ void sensorOutTask(void *pvParameters) {
         } else {
           Serial.println(">:( Outdoor sensor wants the semaphore!!");
         }
-        inCatPres = false;
+        // inCatPres = false;
       }
       outCatPres = true;
       xTimerReset(outCatTimer, 0);
+    } else {
+      digitalWrite(OUT_LED, LOW);
     }
 
     vTaskDelay(1);
@@ -117,9 +132,16 @@ void displayTask(void *pvParameters) {
   initDisplay();
   testDisplay();
   Serial.println(":D Display started");
+  int count_prev = count;
+  showNumber(count);
   for (;;) {
-    showNumber(count);
-    vTaskDelay(1);
+
+    if (count != count_prev) {
+      showNumber(count);
+      count_prev = count;
+    }
+
+    vTaskDelay(50);
   }
 }
 
@@ -129,6 +151,8 @@ void setup() {
 
   pinMode(SENS_IN, INPUT_PULLUP);
   pinMode(SENS_OUT, INPUT_PULLUP);
+  pinMode(IN_LED, OUTPUT);
+  pinMode(OUT_LED, OUTPUT);
 
   countAccessSem = xSemaphoreCreateMutex();
 
@@ -138,9 +162,9 @@ void setup() {
   }
 
   //Sensors have a priority of 2, Display has a priority of 1
-  xTaskCreate(sensorInTask, "Indoor Sensor", 100, NULL, 2, NULL);
-  xTaskCreate(sensorOutTask, "Outdoor Sensor", 100, NULL, 2, NULL);
-  xTaskCreate(displayTask, "Display", 100, NULL, 1, NULL);
+  xTaskCreate(sensorInTask, "Indoor Sensor", 64, NULL, 2, NULL);
+  xTaskCreate(sensorOutTask, "Outdoor Sensor", 64, NULL, 2, NULL);
+  xTaskCreate(displayTask, "Display", 64, NULL, 1, NULL);
 
   Serial.println(":D STARTING SCHEDULER !!");
 
