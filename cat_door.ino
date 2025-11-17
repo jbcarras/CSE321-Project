@@ -4,20 +4,24 @@
 
 #define configUSE_PORT_DELAY 1
 
+//Sensor that is on the inside of the house
 #define SENS_IN 9
+//Sensor that is on the outside of the house
 #define SENS_OUT 2
 
-
+//Function prototypes
 void showNumber(uint8_t num);
 void initDisplay();
 void testDisplay();
 
-bool ready = false;
-
+//The count is how many cats are outside
 volatile int count = 0;
+//Detects if the indoor sensor was triggered
 volatile bool inCatPres = false;
+//Detects if the outdoor sensor was triggered
 volatile bool outCatPres = false;
 
+//Mutex so that there are no race conditions
 SemaphoreHandle_t countAccessSem;
 
 /*
@@ -25,8 +29,8 @@ SemaphoreHandle_t countAccessSem;
   the indoor sensor. 
 */
 void ditchInCatCallback(TimerHandle_t xTimer) {
-  if (digitalRead(SENS_IN) == HIGH) {
-    Serial.println(":3 Cat left indoors");
+  if (digitalRead(SENS_IN) == LOW) {
+    Serial.println(":3 Cat is no longer detected indoors");
     inCatPres = false;
   }
 }
@@ -36,8 +40,8 @@ void ditchInCatCallback(TimerHandle_t xTimer) {
   the outdoor sensor. 
 */
 void ditchOutCatCallback(TimerHandle_t xTimer) {
-  if (digitalRead(SENS_OUT) == HIGH) {
-    Serial.println(":3 Cat left outdoors");
+  if (digitalRead(SENS_OUT) == LOW) {
+    Serial.println(":3 Cat is no longer detected outdoors");
     outCatPres = false;
   }
 }
@@ -51,7 +55,7 @@ void sensorInTask(void *pvParameters) {
   TimerHandle_t inCatTimer = xTimerCreate("Inside Cat Timer", pdMS_TO_TICKS(2000), pdFALSE, NULL, ditchInCatCallback);
   Serial.println(":D Indoor sensor started");
   for (;;) {
-    if (digitalRead(SENS_IN) == LOW) { // TODO: modify to read from motion sensor appropriately
+    if (digitalRead(SENS_IN) == HIGH) { // TODO: modify to read from motion sensor appropriately
       
       if (!inCatPres && outCatPres) {
         
@@ -83,7 +87,7 @@ void sensorOutTask(void *pvParameters) {
   TimerHandle_t outCatTimer = xTimerCreate("Outside Cat Timer", pdMS_TO_TICKS(2000), pdFALSE, NULL, ditchOutCatCallback);
   Serial.println(":D Outdoor sensor started");
   for (;;) {
-    if (digitalRead(SENS_OUT) == LOW) { // TODO: modify to read from motion sensor appropriately
+    if (digitalRead(SENS_OUT) == HIGH) { // TODO: modify to read from motion sensor appropriately
       
       if (!outCatPres && inCatPres) {
         
@@ -133,14 +137,15 @@ void setup() {
     return;
   }
 
-  xTaskCreate(sensorInTask, "Indoor Sensor", 100, NULL, 1, NULL);
-  xTaskCreate(sensorOutTask, "Outdoor Sensor", 100, NULL, 1, NULL);
-  xTaskCreate(displayTask, "Display", 100, NULL, 2, NULL);
+  //Sensors have a priority of 2, Display has a priority of 1
+  xTaskCreate(sensorInTask, "Indoor Sensor", 100, NULL, 2, NULL);
+  xTaskCreate(sensorOutTask, "Outdoor Sensor", 100, NULL, 2, NULL);
+  xTaskCreate(displayTask, "Display", 100, NULL, 1, NULL);
 
   Serial.println(":D STARTING SCHEDULER !!");
 
   vTaskStartScheduler();
-
+  
   Serial.println(":O FAILED TO START SCHEDULER !! (out of memory?)");
 }
 
