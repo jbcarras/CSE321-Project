@@ -8,6 +8,7 @@
 #define T 5
 #define TR 4
 
+
 //Intializing the pins as well as initializing 0 to be the first display
 //The system will show how many cats are outside
 void initDisplay() {
